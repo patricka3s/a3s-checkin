@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>A3S Survey — Advance 3 Spaces</title>
+<style>
+  :root{
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --muted:          #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6; /* blue — primary action */
+    --series-1-dark:  #184f95;
+    --good:           #0ca30c;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0; min-height:100vh;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .wrap{
+    width:100%; max-width:560px; min-height:100vh;
+    background: var(--surface-1);
+    display:flex; flex-direction:column;
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  header{
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid var(--gridline);
+  }
+  header .brand{ font-weight:700; font-size:15px; letter-spacing:0.02em; color: var(--text-secondary); }
+  .progress-track{
+    height:6px; background: var(--gridline); border-radius:4px; overflow:hidden; margin-top:12px;
+  }
+  .progress-fill{
+    height:100%; background: var(--series-1); border-radius:4px;
+    transition: width 0.35s ease;
+  }
+  .progress-label{ font-size:12px; color: var(--muted); margin-top:6px; }
+
+  main{ flex:1; padding: 28px 24px 24px; display:flex; flex-direction:column; }
+  .step{ display:none; flex:1; flex-direction:column; animation: fadein 0.25s ease; }
+  .step.active{ display:flex; }
+  @keyframes fadein{ from{opacity:0; transform: translateY(6px);} to{opacity:1; transform:none;} }
+
+  h1{ font-size:22px; margin: 0 0 8px; line-height:1.3; }
+  h2{ font-size:20px; margin: 0 0 6px; line-height:1.35; }
+  p.lede{ color: var(--text-secondary); font-size:15px; line-height:1.5; margin: 0 0 20px; }
+  p.hint{ color: var(--muted); font-size:13px; margin: 6px 0 0; }
+  .tag{
+    display:inline-block; font-size:12px; font-weight:600; color: var(--series-1);
+    background: color-mix(in srgb, var(--series-1) 12%, transparent);
+    padding: 3px 10px; border-radius:999px; margin-bottom:12px; width:fit-content;
+  }
+
+  label{ display:block; font-size:13px; font-weight:600; color: var(--text-secondary); margin: 18px 0 6px; }
+  label:first-of-type{ margin-top:0; }
+  input[type=email], input[type=text], textarea{
+    width:100%; font-size:16px; padding: 12px 14px; border-radius:10px;
+    border: 1.5px solid var(--gridline); background: var(--surface-1); color: var(--text-primary);
+    font-family: inherit;
+  }
+  input:focus, textarea:focus{ outline:none; border-color: var(--series-1); }
+  textarea{ resize: vertical; min-height:88px; }
+
+  .choices{ display:flex; flex-direction:column; gap:10px; margin-top:4px; }
+  .choice-btn{
+    text-align:left; font-size:16px; padding: 14px 16px; border-radius:12px;
+    border: 1.5px solid var(--gridline); background: var(--surface-1); color: var(--text-primary);
+    cursor:pointer; font-family:inherit; transition: border-color .15s, background .15s;
+  }
+  .choice-btn:hover{ border-color: var(--series-1); }
+  .choice-btn.selected{
+    border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 10%, transparent);
+    font-weight:600;
+  }
+
+  .nav{ display:flex; gap:10px; margin-top:auto; padding-top:24px; }
+  button.primary, button.secondary{
+    font-size:15px; font-weight:600; padding: 13px 22px; border-radius:10px; border:none;
+    cursor:pointer; font-family:inherit;
+  }
+  button.primary{ background: var(--series-1); color:#fff; flex:1; }
+  button.primary:disabled{ background: var(--gridline); color: var(--muted); cursor:not-allowed; }
+  button.primary:not(:disabled):hover{ background: var(--series-1-dark); }
+  button.secondary{ background:transparent; color: var(--text-secondary); border:1.5px solid var(--gridline); }
+  button.secondary:hover{ border-color: var(--muted); }
+  button.skip{
+    background:none; border:none; color: var(--muted); font-size:13px; text-decoration:underline;
+    cursor:pointer; margin-top:14px; align-self:flex-start; font-family:inherit;
+  }
+  .skip-row{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .skip-row button.skip{ margin-top:14px; }
+
+  .thankyou{ align-items:center; text-align:center; justify-content:center; gap:14px; }
+  .thankyou .check{
+    width:56px; height:56px; border-radius:50%; background: color-mix(in srgb, var(--good) 14%, transparent);
+    display:flex; align-items:center; justify-content:center; font-size:28px; color: var(--good);
+  }
+  a.results-link{
+    display:inline-block; margin-top:10px; color: var(--series-1); font-weight:600; text-decoration:none;
+    border: 1.5px solid var(--series-1); padding:10px 18px; border-radius:10px;
+  }
+  a.results-link:hover{ background: color-mix(in srgb, var(--series-1) 10%, transparent); }
+
+  footer{ padding: 14px 24px; text-align:center; color: var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Advance 3 Spaces</div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-label" id="progressLabel"></div>
+  </header>
+
+  <main id="stepsContainer"></main>
+
+  <footer>Checking in logs your attendance right away. Your answers help us group people with shared interests and understand our impact. Preference and impact answers are only visible to A3S organizers.</footer>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — set this to your Apps Script /exec URL after deploying
+   (see README.md for deployment steps)
+   ============================================================ */
+const SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
+
+/* ============================================================
+   Question model
+   type: "choice" (tap-to-select) | "text" (free text)
+   section: "interest" | "preference" | "impact"  (drives which
+            sheet/columns this answer lands in — see apps-script.gs)
+   optional: true means Next is enabled with no answer
+   showIf: (answers) => boolean — conditional questions
+   ============================================================ */
+const QUESTIONS = [
+  // ---- Board game interests (public — feeds shared-interest results) ----
+  { key: "Genre", section: "interest", type: "choice",
+    prompt: "What's your favorite game genre?",
+    options: ["Strategy", "Party", "Cooperative", "Card games", "Trivia"] },
+  { key: "PaceStyle", section: "interest", type: "choice",
+    prompt: "Long, deep games or quick, casual games?",
+    options: ["Long & deep", "Quick & casual", "Depends on my mood"] },
+  { key: "FavoriteReplayGame", section: "interest", type: "text", optional: true,
+    prompt: "A board game you could play over and over?",
+    placeholder: "e.g. Wingspan, Codenames, Catan…" },
+  { key: "TeachStyle", section: "interest", type: "choice",
+    prompt: "Are you more of a “teach me the rules” person, or an “I'll teach others” person?",
+    options: ["Teach me the rules", "I'll teach others", "Either works"] },
+  { key: "CompetitiveStyle", section: "interest", type: "choice",
+    prompt: "Competitive or laid-back player?",
+    options: ["Competitive", "Laid-back", "Depends on the game"] },
+
+  // ---- Interaction & sensory preferences (private — organizer only) ----
+  { key: "SocialStyle", section: "preference", type: "choice",
+    prompt: "At the table, are you more quiet/observing or talkative/chatty?",
+    options: ["Quiet / observing", "Talkative / chatty", "Somewhere in between"] },
+  { key: "NoiseTolerance", section: "preference", type: "choice",
+    prompt: "Do you prefer quieter, calmer spaces, or does noise and bustle not bother you?",
+    options: ["Prefer quieter spaces", "Noise doesn't bother me", "Depends on the day"] },
+  { key: "LightSensitivity", section: "preference", type: "choice",
+    prompt: "Are you sensitive to bright lights?",
+    options: ["Yes, sensitive to bright light", "No, doesn't bother me", "Somewhat"] },
+  { key: "GroupSizePref", section: "preference", type: "choice",
+    prompt: "Do you prefer small groups (2–4) or bigger tables (5+)?",
+    options: ["Small groups (2–4)", "Bigger tables (5+)", "No preference"] },
+  { key: "BreakPref", section: "preference", type: "choice",
+    prompt: "During a long session, do you like scheduled breaks or prefer to play straight through?",
+    options: ["Scheduled breaks", "Play straight through", "No strong preference"] },
+
+  // ---- Impact (private — organizer only; matches A3S's Post-Event Survey wording) ----
+  { key: "FeltMoreConnected", section: "impact", type: "choice",
+    prompt: "Did today's event help you feel more connected to others?",
+    options: ["Not at all", "A little", "I don't know", "Yes - somewhat", "Yes - a lot"] },
+  { key: "BelongingAgreement", section: "impact", type: "choice",
+    prompt: "Do you agree with the statement, “I felt like I belonged here today”?",
+    options: ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"] },
+  { key: "WouldReturnIfIsolated", section: "impact", type: "choice",
+    prompt: "Is this an event you would attend again if you were feeling isolated or lonely?",
+    options: ["Yes", "Maybe", "No"] },
+  // AttendeeStatus is no longer asked — the backend now determines
+  // first-time vs. returning itself (from whether an email already has a
+  // Profile at check-in time), which is more accurate than self-report.
+  { key: "WhatAlmostKeptYouAway", section: "impact", type: "text", optional: true,
+    prompt: "What almost kept you from coming today?",
+    placeholder: "Totally optional — anything that made it harder to show up",
+    // We don't have a server-verified "is this a first-timer" signal
+    // available client-side without an extra round trip, so this uses the
+    // same device-recognition cookie as the check-in screen as a good-enough
+    // proxy: skip this question for a device we've already seen before.
+    showIf: () => !recognizedDevice }
+];
+
+/* ============================================================
+   Cookie helpers — real deployed static site, not a sandboxed
+   artifact, so cookies/localStorage are the right tool here.
+   ============================================================ */
+function getCookie(name){
+  const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function setCookie(name, value, days){
+  const d = new Date();
+  d.setTime(d.getTime() + days * 864e5);
+  document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+}
+function getOrCreateGuid(){
+  let guid = getCookie('a3s_guid');
+  if(!guid){
+    guid = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)));
+    setCookie('a3s_guid', guid, 365 * 5);
+  }
+  return guid;
+}
+
+/* ============================================================
+   Step engine: check-in -> questions -> thankyou
+   ============================================================ */
+const answers = {};
+let stepOrder = []; // computed after check-in, respects showIf
+let currentIndex = -1; // -1 = check-in, N = QUESTIONS index, "done" handled separately
+let checkedIn = false; // has the 'checkin' POST already fired for this visit?
+const container = document.getElementById('stepsContainer');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+
+// Cookie-based device recognition, checked once at load. This drives the
+// "Welcome back" one-tap check-in screen and the What-almost-kept-you-away
+// question's visibility. It's a convenience heuristic (same phone across
+// events, which is the common case since people check in on their own
+// phone) — NOT the source of truth for first-time-vs-returning stats in
+// the admin dashboard, which the backend determines from whether the
+// email already has a Profile, independent of device. See README.md.
+const recognizedDevice = !!(getCookie('a3s_last_email') && getCookie('a3s_last_name'));
+
+function recomputeStepOrder(){
+  stepOrder = QUESTIONS.filter(q => !q.showIf || q.showIf(answers));
+}
+
+function renderIntro(){
+  const savedEmail = getCookie('a3s_last_email');
+  const savedName = getCookie('a3s_last_name');
+
+  if(recognizedDevice){
+    renderWelcomeBack(savedEmail, savedName);
+  } else {
+    renderManualCheckIn('', '');
+  }
+  updateProgress(0, 1, "Check in");
+}
+
+function renderWelcomeBack(savedEmail, savedName){
+  container.innerHTML = `
+    <div class="step active" id="stepIntro">
+      <span class="tag">Check in</span>
+      <h1>Welcome back, ${escapeHtml(savedName)}!</h1>
+      <p class="lede">Checking in as <strong>${escapeHtml(savedName)}</strong> (${escapeHtml(savedEmail)}) on this device.</p>
+      <div class="nav">
+        <button class="primary" id="checkInBtn">Check in</button>
+      </div>
+      <button class="skip" id="notMeBtn">Not you? Check in as someone else</button>
+    </div>
+  `;
+  document.getElementById('checkInBtn').addEventListener('click', () => {
+    confirmCheckIn(savedEmail, savedName);
+  });
+  document.getElementById('notMeBtn').addEventListener('click', () => {
+    renderManualCheckIn('', '');
+  });
+}
+
+function renderManualCheckIn(prefillEmail, prefillName){
+  container.innerHTML = `
+    <div class="step active" id="stepIntro">
+      <span class="tag">Check in</span>
+      <h1>Welcome to Advance 3 Spaces</h1>
+      <p class="lede">Check in below, then we'll ask a few quick questions to help match you with people who share your interests. The questions are optional — you can skip straight out any time and you'll still be checked in.</p>
+
+      <label for="emailInput">Email</label>
+      <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email" value="${escapeHtml(prefillEmail)}">
+      <p class="hint">Used to recognize you across events. Never shown to other participants.</p>
+
+      <label for="nameInput">Name to show in shared-interest results</label>
+      <input type="text" id="nameInput" placeholder="e.g. Priya" autocomplete="given-name" value="${escapeHtml(prefillName)}">
+      <p class="hint">First name is totally fine — this is what other attendees will see.</p>
+
+      <div class="nav">
+        <button class="primary" id="introNext">Check in</button>
+      </div>
+    </div>
+  `;
+  const emailInput = document.getElementById('emailInput');
+  const nameInput = document.getElementById('nameInput');
+
+  document.getElementById('introNext').addEventListener('click', () => {
+    const email = emailInput.value.trim();
+    const name = nameInput.value.trim();
+    if(!email || !email.includes('@')){
+      emailInput.focus();
+      emailInput.style.borderColor = '#e34948';
+      return;
+    }
+    if(!name){
+      nameInput.focus();
+      nameInput.style.borderColor = '#e34948';
+      return;
+    }
+    confirmCheckIn(email, name);
+  });
+}
+
+function confirmCheckIn(email, name){
+  const alreadyCheckedInAsThisPerson = checkedIn && normalizeForCompare(answers.email) === normalizeForCompare(email);
+  answers.email = email;
+  answers.displayName = name;
+  setCookie('a3s_last_email', email, 365 * 5);
+  setCookie('a3s_last_name', name, 365 * 5);
+  if(!alreadyCheckedInAsThisPerson){
+    sendCheckIn(email, name);
+  }
+  recomputeStepOrder();
+  currentIndex = 0;
+  renderStep();
+}
+
+function normalizeForCompare(s){
+  return (s || '').trim().toLowerCase();
+}
+
+function sendCheckIn(email, name){
+  checkedIn = true;
+  postToBackend({
+    type: 'checkin',
+    email: email,
+    displayName: name,
+    guid: getOrCreateGuid()
+  });
+}
+
+function updateProgress(stepNum, totalSteps, sectionLabel){
+  const pct = totalSteps <= 1 ? 0 : Math.round((stepNum / totalSteps) * 100);
+  progressFill.style.width = pct + '%';
+  progressLabel.textContent = totalSteps <= 1 ? sectionLabel : `${sectionLabel} · Question ${stepNum} of ${totalSteps}`;
+}
+
+function sectionLabel(section){
+  if(section === 'interest') return 'Interests';
+  if(section === 'preference') return 'Your preferences';
+  if(section === 'impact') return "Tonight's impact";
+  return '';
+}
+
+function renderStep(){
+  if(currentIndex >= stepOrder.length){
+    renderThankYou();
+    return;
+  }
+  const q = stepOrder[currentIndex];
+  const existing = answers[q.key];
+
+  let bodyHtml = '';
+  if(q.type === 'choice'){
+    bodyHtml = `<div class="choices">` + q.options.map(opt => {
+      const sel = existing === opt ? ' selected' : '';
+      return `<button class="choice-btn${sel}" data-value="${escapeHtml(opt)}">${escapeHtml(opt)}</button>`;
+    }).join('') + `</div>`;
+  } else {
+    bodyHtml = `<textarea id="textAnswer" placeholder="${escapeHtml(q.placeholder || '')}">${escapeHtml(existing || '')}</textarea>`;
+  }
+
+  container.innerHTML = `
+    <div class="step active">
+      <span class="tag">${sectionLabel(q.section)}</span>
+      <h2>${escapeHtml(q.prompt)}</h2>
+      ${bodyHtml}
+      <div class="nav">
+        <button class="secondary" id="backBtn">Back</button>
+        <button class="primary" id="nextBtn" ${q.type === 'choice' && !existing ? 'disabled' : ''}>${currentIndex === stepOrder.length - 1 ? 'Finish' : 'Next'}</button>
+      </div>
+      <div class="skip-row">
+        ${q.optional ? `<button class="skip" id="skipBtn">Skip this one</button>` : '<span></span>'}
+        <button class="skip" id="finishNowBtn">I'm checked in — skip the rest</button>
+      </div>
+    </div>
+  `;
+
+  if(q.type === 'choice'){
+    container.querySelectorAll('.choice-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        answers[q.key] = btn.dataset.value;
+        container.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('nextBtn').disabled = false;
+      });
+    });
+  } else {
+    const ta = document.getElementById('textAnswer');
+    ta.addEventListener('input', () => { answers[q.key] = ta.value; });
+  }
+
+  document.getElementById('backBtn').addEventListener('click', () => {
+    if(currentIndex === 0){ currentIndex = -1; renderIntro(); return; }
+    currentIndex--;
+    recomputeStepOrder();
+    // clamp in case a showIf question disappeared
+    if(currentIndex >= stepOrder.length) currentIndex = stepOrder.length - 1;
+    renderStep();
+  });
+
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    if(q.type === 'text' && !q.optional && !(answers[q.key] || '').trim()){
+      document.getElementById('textAnswer').style.borderColor = '#e34948';
+      return;
+    }
+    advance();
+  });
+
+  const skipBtn = document.getElementById('skipBtn');
+  if(skipBtn){
+    skipBtn.addEventListener('click', () => {
+      answers[q.key] = answers[q.key] || '';
+      advance();
+    });
+  }
+
+  document.getElementById('finishNowBtn').addEventListener('click', () => {
+    renderThankYou();
+  });
+
+  updateProgress(currentIndex + 1, stepOrder.length, sectionLabel(q.section));
+}
+
+function advance(){
+  recomputeStepOrder();
+  currentIndex++;
+  renderStep();
+}
+
+function hasAnyQuestionAnswer(){
+  return QUESTIONS.some(q => (answers[q.key] || '').toString().trim() !== '');
+}
+
+function renderThankYou(){
+  progressFill.style.width = '100%';
+  progressLabel.textContent = 'Done!';
+  const answeredSomething = hasAnyQuestionAnswer();
+  container.innerHTML = `
+    <div class="step active thankyou">
+      <div class="check">✓</div>
+      <h1>${answeredSomething ? `Thanks, ${escapeHtml(answers.displayName)}!` : `You're checked in, ${escapeHtml(answers.displayName)}!`}</h1>
+      <p class="lede">${answeredSomething
+        ? "Your answers are in. Come back and fill this out again after future events — your interests and preferences will just update to your latest answers."
+        : "Enjoy the event! You can always come back to this link to answer a few questions and help us match you with people who share your interests."}</p>
+      <a class="results-link" href="results-public.html">See who shares your interests →</a>
+    </div>
+  `;
+  if(answeredSomething) submitSurveyAnswers();
+}
+
+function submitSurveyAnswers(){
+  postToBackend(Object.assign({ type: 'survey' }, answers, { guid: getOrCreateGuid() }));
+}
+
+function postToBackend(payload){
+  if(!SCRIPT_URL || SCRIPT_URL.indexOf('PASTE_YOUR') === 0){
+    console.warn('SCRIPT_URL not configured yet — submission not sent. See README.md.');
+    return;
+  }
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: JSON.stringify(payload)
+  }).catch(err => console.error('Submission failed to send:', err));
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+
+renderIntro();
+</script>
+</body>
+</html>

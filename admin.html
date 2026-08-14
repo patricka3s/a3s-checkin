@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — A3S Survey</title>
+<style>
+  :root{
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --muted:          #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --series-1: #2a78d6; --series-2: #eb6834;
+    --good: #0ca30c; --critical: #d03b3b;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--page); color:var(--text-primary); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .page{ max-width:1180px; margin:0 auto; padding: 28px 20px 60px; }
+  h1{ font-size:24px; margin:0 0 4px; }
+  p.lede{ color:var(--text-secondary); font-size:14px; margin:0 0 20px; }
+
+  .gate{
+    max-width:420px; margin: 80px auto; background:var(--surface-1); border:1px solid var(--border);
+    border-radius:14px; padding:28px; text-align:center;
+  }
+  .gate h2{ margin:0 0 8px; font-size:19px; }
+  .gate p{ color:var(--text-secondary); font-size:13px; margin:0 0 16px; }
+  .gate input{
+    width:100%; font-size:15px; padding:11px 13px; border-radius:9px; border:1.5px solid var(--gridline);
+    margin-bottom:12px; font-family:inherit;
+  }
+  .gate button{
+    width:100%; font-size:14px; font-weight:600; padding:11px; border-radius:9px; border:none;
+    background:var(--series-1); color:#fff; cursor:pointer; font-family:inherit;
+  }
+  .gate .error{ color:var(--critical); font-size:12px; margin-top:10px; display:none; }
+
+  .stat-row{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin: 18px 0 26px; }
+  .stat-tile{ background:var(--surface-1); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .stat-tile .value{ font-size:26px; font-weight:700; }
+  .stat-tile .label{ font-size:12px; color:var(--muted); margin-top:2px; }
+
+  section{ margin-bottom:34px; }
+  section h2{ font-size:17px; margin:0 0 4px; }
+  section p.section-sub{ color:var(--muted); font-size:13px; margin:0 0 14px; }
+
+  .charts-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap:16px; margin-bottom:18px; }
+  .chart-card{ background:var(--surface-1); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .chart-card h3{ font-size:13px; margin:0 0 10px; color:var(--text-secondary); }
+  .bar-row{ display:flex; align-items:center; gap:8px; margin-bottom:7px; font-size:12px; }
+  .bar-row .bar-label{ width:120px; flex:none; color:var(--text-secondary); text-align:right; }
+  .bar-row .bar-track{ flex:1; background:var(--gridline); border-radius:4px; height:16px; position:relative; overflow:hidden; }
+  .bar-row .bar-fill{ height:100%; border-radius:4px; }
+  .bar-row .bar-count{ width:34px; flex:none; font-weight:600; }
+
+  .toolbar{ display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+  .toolbar input[type=text]{
+    flex:1; min-width:180px; font-size:13px; padding:8px 12px; border-radius:8px; border:1.5px solid var(--gridline);
+    font-family:inherit;
+  }
+  .toolbar button{
+    font-size:12px; font-weight:600; padding:8px 13px; border-radius:8px; border:1.5px solid var(--gridline);
+    background:var(--surface-1); cursor:pointer; color:var(--text-secondary); font-family:inherit;
+  }
+  .toolbar button:hover{ border-color: var(--series-1); color:var(--series-1); }
+
+  table{ width:100%; border-collapse: collapse; background:var(--surface-1); border:1px solid var(--border); border-radius:12px; overflow:hidden; font-size:13px; }
+  th, td{ text-align:left; padding:9px 12px; border-bottom:1px solid var(--gridline); }
+  th{ background:var(--page); color:var(--text-secondary); font-weight:600; cursor:pointer; user-select:none; white-space:nowrap; }
+  th:hover{ color:var(--series-1); }
+  tr:last-child td{ border-bottom:none; }
+  td.muted{ color:var(--muted); }
+  .table-wrap{ overflow-x:auto; }
+
+  .updated-label{ font-size:12px; color:var(--muted); margin-bottom:6px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div id="gateView" class="gate" style="display:none;">
+    <h2>Organizer access</h2>
+    <p>Enter the admin key to view preferences and impact data.</p>
+    <input type="password" id="keyInput" placeholder="Admin key">
+    <button id="unlockBtn">Unlock</button>
+    <div class="error" id="gateError">That key didn't work — check it and try again.</div>
+  </div>
+
+  <div id="dashView" style="display:none;">
+    <h1>A3S organizer dashboard</h1>
+    <p class="lede">Attendance, preferences, and impact data — visible to organizers only. <a href="results-public.html">View the public shared-interests page →</a></p>
+    <div class="updated-label" id="updatedLabel"></div>
+
+    <div class="stat-row" id="statRow"></div>
+
+    <section>
+      <h2>Attendance</h2>
+      <p class="section-sub">Every check-in is logged the instant someone confirms their identity at the door — whether or not they go on to answer any questions. First-time vs. returning is determined by whether that email already had a profile at check-in time, not self-reported.</p>
+      <div class="charts-grid" id="attendanceCharts"></div>
+      <div class="toolbar">
+        <input type="text" id="checkinSearch" placeholder="Filter by name or email…">
+        <button id="exportCheckinBtn">Export CSV</button>
+      </div>
+      <div class="table-wrap"><table id="checkinTable"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <section>
+      <div class="toolbar">
+        <h2 style="margin:0;">Impact</h2>
+      </div>
+      <p class="section-sub">Every survey submission adds a new dated row here — nothing is overwritten, so this reflects trends across all events.</p>
+      <div class="charts-grid" id="impactCharts"></div>
+      <div class="toolbar">
+        <input type="text" id="impactSearch" placeholder="Filter by name or email…">
+        <button id="exportImpactBtn">Export CSV</button>
+      </div>
+      <div class="table-wrap"><table id="impactTable"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <section>
+      <h2>Individual preferences</h2>
+      <p class="section-sub">Current preferences per person (latest submission), for accommodation planning. Not shown publicly.</p>
+      <div class="toolbar">
+        <input type="text" id="prefSearch" placeholder="Filter by name or email…">
+        <button id="exportPrefBtn">Export CSV</button>
+      </div>
+      <div class="table-wrap"><table id="prefTable"><thead></thead><tbody></tbody></table></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
+
+const SEQ_BLUE = ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281']; // ordinal, 5-step, light-end >=2:1
+const CAT_2 = ['#2a78d6', '#eb6834'];
+
+let allImpact = [];
+let allProfiles = [];
+let allCheckins = [];
+let adminKey = null;
+
+function getUrlKey(){
+  return new URLSearchParams(location.search).get('key');
+}
+
+function fetchJSONP(url){
+  return new Promise((resolve, reject) => {
+    const cbName = 'jsonp_cb_' + Math.random().toString(36).slice(2);
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('timed out')); }, 15000);
+    window[cbName] = (data) => { clearTimeout(timeout); resolve(data); cleanup(); };
+    const script = document.createElement('script');
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+    script.onerror = () => { clearTimeout(timeout); cleanup(); reject(new Error('request failed')); };
+    function cleanup(){ delete window[cbName]; script.remove(); }
+    document.body.appendChild(script);
+  });
+}
+
+function escapeHtml(str){
+  return String(str==null?'':str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+
+async function tryLoad(key){
+  if(!SCRIPT_URL || SCRIPT_URL.indexOf('PASTE_YOUR') === 0){
+    document.getElementById('dashView').style.display = 'none';
+    document.getElementById('gateView').style.display = 'block';
+    document.getElementById('gateView').innerHTML = '<h2>Not configured</h2><p>This page isn\'t connected to a survey backend yet. See README.md.</p>';
+    return;
+  }
+  try{
+    const data = await fetchJSONP(SCRIPT_URL + '?key=' + encodeURIComponent(key));
+    if(!data.admin){
+      showGate(true);
+      return;
+    }
+    adminKey = key;
+    sessionStorage.setItem('a3s_admin_key', key);
+    allProfiles = data.profiles || [];
+    allImpact = data.impact || [];
+    allCheckins = data.checkins || [];
+    renderDashboard();
+  } catch(err){
+    console.error(err);
+    showGate(true);
+  }
+}
+
+function showGate(withError){
+  document.getElementById('dashView').style.display = 'none';
+  document.getElementById('gateView').style.display = 'block';
+  document.getElementById('gateError').style.display = withError ? 'block' : 'none';
+}
+
+document.getElementById('unlockBtn').addEventListener('click', () => {
+  const key = document.getElementById('keyInput').value.trim();
+  if(key) tryLoad(key);
+});
+document.getElementById('keyInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') document.getElementById('unlockBtn').click();
+});
+
+function renderDashboard(){
+  document.getElementById('gateView').style.display = 'none';
+  document.getElementById('dashView').style.display = 'block';
+  document.getElementById('updatedLabel').textContent = 'Loaded ' + new Date().toLocaleString();
+
+  renderStats();
+  renderAttendanceCharts();
+  renderCheckinTable();
+  renderImpactCharts();
+  renderImpactTable();
+  renderPrefTable();
+}
+
+function scoreFeltConnected(v){
+  const map = { 'Not at all':1, 'A little':2, "I don't know": null, 'Yes - somewhat':4, 'Yes - a lot':5 };
+  return map.hasOwnProperty(v) ? map[v] : null;
+}
+
+function renderStats(){
+  const totalCheckins = allCheckins.length;
+  const uniqueAttendees = new Set(allCheckins.map(r => (r.Email || '').toLowerCase()).filter(Boolean)).size;
+  const firstTimeCheckins = allCheckins.filter(r => r.IsReturning === 'First time').length;
+  const totalImpactSubs = allImpact.length;
+  const scores = allImpact.map(r => scoreFeltConnected(r.FeltMoreConnected)).filter(v => v !== null);
+  const avgScore = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
+  const wouldReturn = allImpact.filter(r => r.WouldReturnIfIsolated === 'Yes').length;
+
+  const tiles = [
+    { value: totalCheckins, label: 'Total check-ins' },
+    { value: uniqueAttendees, label: 'Unique attendees' },
+    { value: totalCheckins ? Math.round(firstTimeCheckins/totalCheckins*100)+'%' : '—', label: 'First-time check-ins' },
+    { value: totalCheckins ? Math.round(totalImpactSubs/totalCheckins*100)+'%' : '—', label: 'Check-ins that answered impact Qs' },
+    { value: avgScore + ' / 5', label: 'Avg. "felt more connected" score' },
+    { value: totalImpactSubs ? Math.round(wouldReturn/totalImpactSubs*100)+'%' : '—', label: '"Would return if isolated" = Yes' }
+  ];
+  document.getElementById('statRow').innerHTML = tiles.map(t =>
+    `<div class="stat-tile"><div class="value">${t.value}</div><div class="label">${t.label}</div></div>`
+  ).join('');
+}
+
+function bucketByDate(rows, dateKey){
+  const counts = new Map();
+  rows.forEach(r => {
+    const d = r[dateKey] ? new Date(r[dateKey]) : null;
+    if(!d || isNaN(d.getTime())) return;
+    const key = d.toISOString().slice(0, 10); // YYYY-MM-DD, local-agnostic bucketing
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function renderAttendanceCharts(){
+  const el = document.getElementById('attendanceCharts');
+  el.innerHTML = '';
+  const allBuckets = bucketByDate(allCheckins, 'Timestamp');
+  const recentBuckets = allBuckets.slice(-14);
+  const title = recentBuckets.length < allBuckets.length ? 'Check-ins by date (most recent 14)' : 'Check-ins by date';
+  renderBarChart(el, title, recentBuckets.map(([date, count]) => ({ label: date, count })), [SEQ_BLUE[2]]);
+  renderBarChart(el, 'First-time vs. returning check-ins', distribution(allCheckins, 'IsReturning',
+    ['First time', "I've been before"]), CAT_2);
+}
+
+let checkinSort = { col: 'Timestamp', dir: -1 };
+const CHECKIN_COLS = [
+  { key: 'Timestamp', label: 'Date' },
+  { key: 'DisplayName', label: 'Name' },
+  { key: 'Email', label: 'Email' },
+  { key: 'IsReturning', label: 'Status' }
+];
+
+function renderCheckinTable(){
+  const q = (document.getElementById('checkinSearch').value || '').toLowerCase();
+  let rows = allCheckins.filter(r =>
+    !q || (r.DisplayName||'').toLowerCase().includes(q) || (r.Email||'').toLowerCase().includes(q)
+  );
+  rows = rows.slice().sort((a,b) => {
+    const av = a[checkinSort.col] || '', bv = b[checkinSort.col] || '';
+    return av > bv ? checkinSort.dir : av < bv ? -checkinSort.dir : 0;
+  });
+  const table = document.getElementById('checkinTable');
+  table.querySelector('thead').innerHTML = '<tr>' + CHECKIN_COLS.map(c =>
+    `<th data-col="${c.key}">${c.label}${checkinSort.col===c.key ? (checkinSort.dir===1?' ▲':' ▼') : ''}</th>`
+  ).join('') + '</tr>';
+  table.querySelector('tbody').innerHTML = rows.map(r => '<tr>' + CHECKIN_COLS.map(c => {
+    let v = r[c.key];
+    if(c.key === 'Timestamp' && v) v = new Date(v).toLocaleString();
+    return `<td class="${v ? '' : 'muted'}">${escapeHtml(v || '—')}</td>`;
+  }).join('') + '</tr>').join('') || `<tr><td colspan="${CHECKIN_COLS.length}" class="muted">No check-ins yet.</td></tr>`;
+
+  table.querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    checkinSort.dir = (checkinSort.col === col) ? -checkinSort.dir : 1;
+    checkinSort.col = col;
+    renderCheckinTable();
+  }));
+}
+document.getElementById('checkinSearch').addEventListener('input', renderCheckinTable);
+document.getElementById('exportCheckinBtn').addEventListener('click', () => {
+  downloadCSV('a3s-checkins.csv', allCheckins, CHECKIN_COLS.map(c => c.key));
+});
+
+function distribution(rows, key, options){
+  const counts = new Map(options.map(o => [o, 0]));
+  rows.forEach(r => { if(counts.has(r[key])) counts.set(r[key], counts.get(r[key]) + 1); });
+  return options.map(o => ({ label: o, count: counts.get(o) }));
+}
+
+function renderBarChart(container, title, dist, colors){
+  const max = Math.max(1, ...dist.map(d => d.count));
+  const total = dist.reduce((s,d) => s+d.count, 0);
+  const card = document.createElement('div');
+  card.className = 'chart-card';
+  card.innerHTML = `<h3>${escapeHtml(title)}</h3>` + dist.map((d,i) => {
+    const pct = max ? (d.count/max*100) : 0;
+    const pctOfTotal = total ? Math.round(d.count/total*100) : 0;
+    const color = colors[i % colors.length];
+    return `<div class="bar-row" title="${escapeHtml(d.label)}: ${d.count} (${pctOfTotal}%)">
+      <div class="bar-label">${escapeHtml(d.label)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${color}"></div></div>
+      <div class="bar-count">${d.count}</div>
+    </div>`;
+  }).join('');
+  container.appendChild(card);
+}
+
+function renderImpactCharts(){
+  const el = document.getElementById('impactCharts');
+  el.innerHTML = '';
+  renderBarChart(el, 'Felt more connected tonight?', distribution(allImpact, 'FeltMoreConnected',
+    ['Not at all','A little',"I don't know",'Yes - somewhat','Yes - a lot']), SEQ_BLUE);
+  renderBarChart(el, '"I felt like I belonged here today"', distribution(allImpact, 'BelongingAgreement',
+    ['Strongly disagree','Disagree','Neither agree nor disagree','Agree','Strongly agree']), SEQ_BLUE);
+  renderBarChart(el, 'Would return if feeling isolated/lonely', distribution(allImpact, 'WouldReturnIfIsolated',
+    ['Yes','Maybe','No']), [SEQ_BLUE[0], SEQ_BLUE[2], SEQ_BLUE[4]]);
+  renderBarChart(el, 'First-time vs. returning (of those who answered)', distribution(allImpact, 'AttendeeStatus',
+    ['First time', "I've been before"]), CAT_2);
+}
+
+let impactSort = { col: 'Timestamp', dir: -1 };
+const IMPACT_COLS = [
+  { key: 'Timestamp', label: 'Date' },
+  { key: 'DisplayName', label: 'Name' },
+  { key: 'Email', label: 'Email' },
+  { key: 'FeltMoreConnected', label: 'Felt connected' },
+  { key: 'BelongingAgreement', label: 'Belonging' },
+  { key: 'WouldReturnIfIsolated', label: 'Return if isolated' },
+  { key: 'AttendeeStatus', label: 'Status' },
+  { key: 'WhatAlmostKeptYouAway', label: 'What almost kept them away' }
+];
+
+function renderImpactTable(){
+  const q = (document.getElementById('impactSearch').value || '').toLowerCase();
+  let rows = allImpact.filter(r =>
+    !q || (r.DisplayName||'').toLowerCase().includes(q) || (r.Email||'').toLowerCase().includes(q)
+  );
+  rows = rows.slice().sort((a,b) => {
+    const av = a[impactSort.col] || '', bv = b[impactSort.col] || '';
+    return av > bv ? impactSort.dir : av < bv ? -impactSort.dir : 0;
+  });
+  const table = document.getElementById('impactTable');
+  table.querySelector('thead').innerHTML = '<tr>' + IMPACT_COLS.map(c =>
+    `<th data-col="${c.key}">${c.label}${impactSort.col===c.key ? (impactSort.dir===1?' ▲':' ▼') : ''}</th>`
+  ).join('') + '</tr>';
+  table.querySelector('tbody').innerHTML = rows.map(r => '<tr>' + IMPACT_COLS.map(c => {
+    let v = r[c.key];
+    if(c.key === 'Timestamp' && v) v = new Date(v).toLocaleString();
+    return `<td class="${v ? '' : 'muted'}">${escapeHtml(v || '—')}</td>`;
+  }).join('') + '</tr>').join('') || `<tr><td colspan="${IMPACT_COLS.length}" class="muted">No submissions yet.</td></tr>`;
+
+  table.querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    impactSort.dir = (impactSort.col === col) ? -impactSort.dir : 1;
+    impactSort.col = col;
+    renderImpactTable();
+  }));
+}
+document.getElementById('impactSearch').addEventListener('input', renderImpactTable);
+document.getElementById('exportImpactBtn').addEventListener('click', () => {
+  downloadCSV('a3s-impact.csv', allImpact, IMPACT_COLS.map(c => c.key));
+});
+
+let prefSort = { col: 'DisplayName', dir: 1 };
+const PREF_COLS = [
+  { key: 'DisplayName', label: 'Name' },
+  { key: 'Email', label: 'Email' },
+  { key: 'SocialStyle', label: 'Social style' },
+  { key: 'NoiseTolerance', label: 'Noise' },
+  { key: 'LightSensitivity', label: 'Light sensitivity' },
+  { key: 'GroupSizePref', label: 'Group size' },
+  { key: 'BreakPref', label: 'Breaks' },
+  { key: 'LastUpdated', label: 'Last updated' }
+];
+
+function renderPrefTable(){
+  const q = (document.getElementById('prefSearch').value || '').toLowerCase();
+  let rows = allProfiles.filter(r =>
+    !q || (r.DisplayName||'').toLowerCase().includes(q) || (r.Email||'').toLowerCase().includes(q)
+  );
+  rows = rows.slice().sort((a,b) => {
+    const av = a[prefSort.col] || '', bv = b[prefSort.col] || '';
+    return av > bv ? prefSort.dir : av < bv ? -prefSort.dir : 0;
+  });
+  const table = document.getElementById('prefTable');
+  table.querySelector('thead').innerHTML = '<tr>' + PREF_COLS.map(c =>
+    `<th data-col="${c.key}">${c.label}${prefSort.col===c.key ? (prefSort.dir===1?' ▲':' ▼') : ''}</th>`
+  ).join('') + '</tr>';
+  table.querySelector('tbody').innerHTML = rows.map(r => '<tr>' + PREF_COLS.map(c => {
+    let v = r[c.key];
+    if(c.key === 'LastUpdated' && v) v = new Date(v).toLocaleString();
+    return `<td class="${v ? '' : 'muted'}">${escapeHtml(v || '—')}</td>`;
+  }).join('') + '</tr>').join('') || `<tr><td colspan="${PREF_COLS.length}" class="muted">No profiles yet.</td></tr>`;
+
+  table.querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    prefSort.dir = (prefSort.col === col) ? -prefSort.dir : 1;
+    prefSort.col = col;
+    renderPrefTable();
+  }));
+}
+document.getElementById('prefSearch').addEventListener('input', renderPrefTable);
+document.getElementById('exportPrefBtn').addEventListener('click', () => {
+  downloadCSV('a3s-preferences.csv', allProfiles, PREF_COLS.map(c => c.key));
+});
+
+function csvEscape(v){
+  v = (v==null ? '' : String(v));
+  if(/[",\n]/.test(v)) return '"' + v.replace(/"/g,'""') + '"';
+  return v;
+}
+function downloadCSV(filename, rows, columns){
+  const header = columns.join(',');
+  const lines = rows.map(r => columns.map(c => csvEscape(r[c])).join(','));
+  const csv = [header, ...lines].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---- Bootstrap: URL ?key= wins, else sessionStorage, else prompt ----
+(function init(){
+  const urlKey = getUrlKey();
+  const storedKey = sessionStorage.getItem('a3s_admin_key');
+  const key = urlKey || storedKey;
+  if(key){
+    document.getElementById('keyInput').value = key;
+    tryLoad(key);
+  } else {
+    showGate(false);
+  }
+})();
+</script>
+</body>
+</html>
