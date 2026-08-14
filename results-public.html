@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shared Interests — Advance 3 Spaces</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  :root{
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --muted:          #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+    --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
+    --other: #c3c2b7;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--page); color:var(--text-primary); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .page{ max-width:1180px; margin:0 auto; padding: 28px 20px 60px; }
+  header{ margin-bottom: 22px; }
+  h1{ font-size:26px; margin:0 0 6px; }
+  p.lede{ color:var(--text-secondary); font-size:15px; max-width:640px; line-height:1.5; margin:0 0 14px; }
+  .toolbar{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .toolbar button{
+    font-family:inherit; font-size:13px; font-weight:600; padding:8px 14px; border-radius:8px;
+    border:1.5px solid var(--gridline); background:var(--surface-1); color:var(--text-secondary); cursor:pointer;
+  }
+  .toolbar button:hover{ border-color: var(--series-1); color:var(--series-1); }
+  .toolbar button.active{ border-color: var(--series-1); color: var(--series-1); background: color-mix(in srgb, var(--series-1) 8%, transparent); }
+  .updated-label{ font-size:12px; color:var(--muted); }
+  .empty-state{
+    background:var(--surface-1); border:1.5px dashed var(--gridline); border-radius:14px;
+    padding:40px 24px; text-align:center; color:var(--text-secondary); margin-top:20px;
+  }
+
+  .grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap:18px; margin-top:20px; }
+  .panel{
+    background:var(--surface-1); border:1px solid var(--border); border-radius:14px;
+    padding:16px 16px 14px; display:flex; flex-direction:column;
+  }
+  .panel-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:8px; }
+  .panel-head h2{ font-size:15px; margin:0; line-height:1.35; }
+  .panel-head .count{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .fs-btn{
+    font-size:12px; font-weight:600; color:var(--muted); background:none; border:1px solid var(--gridline);
+    border-radius:7px; padding:5px 9px; cursor:pointer; white-space:nowrap; font-family:inherit;
+  }
+  .fs-btn:hover{ color:var(--series-1); border-color:var(--series-1); }
+  svg.graph{ width:100%; height:260px; background: var(--page); border-radius:10px; }
+  .panel:fullscreen{ padding:20px; }
+  .panel:fullscreen svg.graph{ height: calc(100vh - 130px); }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:10px; }
+  .legend-item{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary); }
+  .swatch{ width:10px; height:10px; border-radius:3px; flex:none; }
+
+  .list-mode .panel .graph{ display:none; }
+  .cluster-list{ display:none; flex-direction:column; gap:10px; margin-top:4px; }
+  .list-mode .cluster-list{ display:flex; }
+  .cluster-group{ border-left:3px solid var(--gridline); padding-left:10px; }
+  .cluster-group .glabel{ font-size:12px; font-weight:700; margin-bottom:3px; }
+  .cluster-group .gnames{ font-size:13px; color:var(--text-secondary); line-height:1.5; }
+
+  .feed{ margin-top:28px; }
+  .feed h2{ font-size:16px; margin:0 0 10px; }
+  .feed ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .feed li{
+    font-size:14px; color:var(--text-secondary); background:var(--surface-1); border:1px solid var(--border);
+    border-radius:10px; padding:10px 14px;
+  }
+  .feed li strong{ color:var(--text-primary); }
+
+  footer{ margin-top:36px; color:var(--muted); font-size:12px; text-align:center; }
+  footer a{ color: var(--series-1); }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Who shares your interests?</h1>
+    <p class="lede">Live picture of what Advance 3 Spaces attendees are into, built from everyone's most recent survey answers. Drag the dots around, or switch to list view. This updates every couple of minutes — no need to keep refreshing.</p>
+    <div class="toolbar">
+      <button id="viewToggle">Switch to list view</button>
+      <button id="refreshBtn">Refresh now</button>
+      <span class="updated-label" id="updatedLabel">Loading…</span>
+    </div>
+  </header>
+
+  <div id="content"></div>
+
+  <footer>Haven't taken the survey yet? <a href="survey.html">Fill it out here</a> — it only takes a few minutes.</footer>
+</div>
+
+<script>
+const SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
+const REFRESH_MS = 90 * 1000; // gentle polling — this isn't a live session
+
+const PALETTE = ['var(--series-1)','var(--series-2)','var(--series-3)','var(--series-4)','var(--series-5)','var(--series-6)','var(--series-7)','var(--series-8)'];
+const PALETTE_HEX = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+const OTHER_COLOR = '#c3c2b7';
+
+const CHOICE_PANELS = [
+  { key: 'Genre', title: "Favorite game genre" },
+  { key: 'PaceStyle', title: "Long & deep vs. quick & casual" },
+  { key: 'TeachStyle', title: "Teaching style" },
+  { key: 'CompetitiveStyle', title: "Competitive vs. laid-back" }
+];
+const NEUTRAL_RE = /depends|either works|no preference|no strong preference|somewhere in between|not sure|don.?t know/i;
+const STOPWORDS = new Set(['about','after','again','board','could','every','favorite','favourite','games','game','over','play','played','playing','still','their','there','these','think','which','would','really','never','always','other','pretty','anything']);
+
+let listMode = false;
+let latestPeople = [];
+
+function fetchJSONP(url){
+  return new Promise((resolve, reject) => {
+    const cbName = 'jsonp_cb_' + Math.random().toString(36).slice(2);
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('timed out')); }, 15000);
+    window[cbName] = (data) => { clearTimeout(timeout); resolve(data); cleanup(); };
+    const script = document.createElement('script');
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+    script.onerror = () => { clearTimeout(timeout); cleanup(); reject(new Error('JSONP request failed')); };
+    function cleanup(){ delete window[cbName]; script.remove(); }
+    document.body.appendChild(script);
+  });
+}
+
+function buildChoiceClusters(people, key){
+  const groups = new Map();
+  people.forEach(p => {
+    const ans = (p[key] || '').trim();
+    if(!ans || NEUTRAL_RE.test(ans)) return;
+    const norm = ans.toLowerCase();
+    if(!groups.has(norm)) groups.set(norm, { label: ans, people: [] });
+    groups.get(norm).people.push(p);
+  });
+  const clusters = Array.from(groups.values()).filter(g => g.people.length >= 2);
+  clusters.sort((a,b) => b.people.length - a.people.length);
+  clusters.forEach((c,i) => { c.color = i < 8 ? PALETTE[i] : OTHER_COLOR; c.colorHex = i < 8 ? PALETTE_HEX[i] : OTHER_COLOR; });
+  return clusters;
+}
+
+function extractKeywords(text){
+  return (text||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w => w.length >= 5 && !STOPWORDS.has(w));
+}
+
+function buildKeywordClusters(people){
+  const wordMap = new Map(); // word -> Set(person)
+  people.forEach(p => {
+    const words = new Set(extractKeywords(p.FavoriteReplayGame));
+    words.forEach(w => {
+      if(!wordMap.has(w)) wordMap.set(w, new Set());
+      wordMap.get(w).add(p);
+    });
+  });
+  const clusters = [];
+  wordMap.forEach((peopleSet, word) => {
+    if(peopleSet.size >= 2) clusters.push({ label: '"' + word + '"', people: Array.from(peopleSet) });
+  });
+  clusters.sort((a,b) => b.people.length - a.people.length);
+  clusters.forEach((c,i) => { c.color = i < 8 ? PALETTE[i] : OTHER_COLOR; c.colorHex = i < 8 ? PALETTE_HEX[i] : OTHER_COLOR; });
+  return clusters;
+}
+
+function initials(name){
+  return (name||'?').trim().split(/\s+/).slice(0,2).map(w => w[0] ? w[0].toUpperCase() : '').join('') || '?';
+}
+
+function renderLegend(el, clusters, totalPeople, matchedCount){
+  el.innerHTML = '';
+  clusters.slice(0, 9).forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `<span class="swatch" style="background:${c.color}"></span>${escapeHtml(c.label)} (${c.people.length})`;
+    el.appendChild(item);
+  });
+  if(clusters.length === 0){
+    el.innerHTML = `<div class="legend-item" style="color:var(--muted)">No shared groups of 2+ yet</div>`;
+  }
+}
+
+function drag(sim){
+  function started(event, d){ if(!event.active) sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; }
+  function dragged(event, d){ d.fx = event.x; d.fy = event.y; }
+  function ended(event, d){ if(!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }
+  return d3.drag().on('start', started).on('drag', dragged).on('end', ended);
+}
+
+function renderGraph(svgEl, people, clusters){
+  const width = svgEl.clientWidth || 320, height = svgEl.clientHeight || 260;
+  const svg = d3.select(svgEl);
+  svg.selectAll('*').remove();
+  if(people.length === 0) return;
+
+  const nodeByPerson = new Map();
+  const nodes = people.map((p, idx) => {
+    const n = { id: 'n' + idx, name: p.DisplayName || 'Someone', color: OTHER_COLOR, clusterLabel: null };
+    nodeByPerson.set(p, n);
+    return n;
+  });
+
+  const links = [];
+  clusters.forEach(cluster => {
+    const pts = cluster.people.map(p => nodeByPerson.get(p)).filter(Boolean);
+    pts.forEach(n => { n.color = cluster.color; n.clusterLabel = cluster.label; });
+    for(let i=0;i<pts.length;i++){
+      for(let j=i+1;j<pts.length;j++){
+        links.push({ source: pts[i].id, target: pts[j].id });
+      }
+    }
+  });
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d=>d.id).distance(54).strength(0.6))
+    .force('charge', d3.forceManyBody().strength(-85))
+    .force('center', d3.forceCenter(width/2, height/2))
+    .force('collide', d3.forceCollide(18));
+
+  const link = svg.append('g').selectAll('line').data(links).join('line')
+    .attr('stroke', '#e1e0d9').attr('stroke-width', 1.4);
+
+  const node = svg.append('g').selectAll('g').data(nodes).join('g').style('cursor','grab').call(drag(sim));
+
+  node.append('circle').attr('r', 15).attr('fill', d => d.color)
+    .attr('stroke', '#fcfcfb').attr('stroke-width', 2);
+  node.append('text').text(d => initials(d.name)).attr('text-anchor','middle').attr('dy','0.35em')
+    .attr('font-size','10px').attr('font-weight','700').attr('fill','#fff').attr('pointer-events','none');
+  node.append('title').text(d => d.name + (d.clusterLabel ? ' — ' + d.clusterLabel : ' — no shared group yet'));
+
+  sim.on('tick', () => {
+    link.attr('x1', d=>d.source.x).attr('y1', d=>d.source.y).attr('x2', d=>d.target.x).attr('y2', d=>d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+function renderClusterList(el, clusters){
+  el.innerHTML = '';
+  if(clusters.length === 0){
+    el.innerHTML = `<div style="color:var(--muted); font-size:13px;">No shared groups of 2+ yet.</div>`;
+    return;
+  }
+  clusters.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'cluster-group';
+    div.style.borderLeftColor = c.color;
+    div.innerHTML = `<div class="glabel">${escapeHtml(c.label)} (${c.people.length})</div><div class="gnames">${c.people.map(p => escapeHtml(p.DisplayName || 'Someone')).join(', ')}</div>`;
+    el.appendChild(div);
+  });
+}
+
+function buildPanelCard(title){
+  const card = document.createElement('div');
+  card.className = 'panel';
+  card.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <h2>${escapeHtml(title)}</h2>
+        <div class="count"></div>
+      </div>
+      <button class="fs-btn">Fullscreen</button>
+    </div>
+    <svg class="graph"></svg>
+    <div class="cluster-list"></div>
+    <div class="legend"></div>
+  `;
+  const fsBtn = card.querySelector('.fs-btn');
+  fsBtn.addEventListener('click', () => {
+    if(document.fullscreenElement === card){ document.exitFullscreen(); }
+    else { card.requestFullscreen(); }
+  });
+  card.addEventListener('fullscreenchange', () => {
+    fsBtn.textContent = document.fullscreenElement === card ? 'Exit fullscreen' : 'Fullscreen';
+    // Fullscreen changes the SVG's actual pixel size, so the force
+    // simulation needs to re-center on the new dimensions or nodes stay
+    // stuck at the old (much smaller) canvas's coordinates.
+    if(card._rerenderGraph) requestAnimationFrame(card._rerenderGraph);
+  });
+  return card;
+}
+
+function renderAll(people){
+  latestPeople = people;
+  const content = document.getElementById('content');
+  content.classList.toggle('list-mode', listMode);
+
+  if(people.length < 2){
+    content.innerHTML = `<div class="empty-state">Not enough responses yet to show shared-interest groups (need at least 2). Check back after more people fill out the <a href="survey.html">survey</a>.</div>`;
+    renderFeed(people);
+    return;
+  }
+
+  content.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  content.appendChild(grid);
+
+  // Pass 1: build and attach every card first. CSS grid only knows its real
+  // column widths once all siblings are present, so measuring clientWidth
+  // (which renderGraph needs for the force simulation's center point)
+  // before every card exists would give early panels a stale, too-wide
+  // measurement and their nodes would drift off-canvas.
+  const panelJobs = [];
+  CHOICE_PANELS.forEach(panelDef => {
+    const clusters = buildChoiceClusters(people, panelDef.key);
+    const matched = clusters.reduce((s,c) => s + c.people.length, 0);
+    const card = buildPanelCard(panelDef.title);
+    grid.appendChild(card);
+    card.querySelector('.count').textContent = `${people.length} responses · ${matched} in a shared group`;
+    panelJobs.push({ card, clusters });
+  });
+
+  const kwClusters = buildKeywordClusters(people);
+  const kwMatched = new Set(kwClusters.flatMap(c => c.people)).size;
+  const kwCard = buildPanelCard('Games we’d replay (word matches)');
+  grid.appendChild(kwCard);
+  kwCard.querySelector('.count').textContent = `${people.length} responses · ${kwMatched} share a word in common`;
+  panelJobs.push({ card: kwCard, clusters: kwClusters });
+
+  // Pass 2: now that the grid's final column widths are settled, render
+  // each panel's graph/list/legend.
+  panelJobs.forEach(({ card, clusters }) => {
+    card._rerenderGraph = () => renderGraph(card.querySelector('svg.graph'), people, clusters);
+    card._rerenderGraph();
+    renderClusterList(card.querySelector('.cluster-list'), clusters);
+    renderLegend(card.querySelector('.legend'), clusters, people.length, clusters.reduce((s,c) => s + c.people.length, 0));
+  });
+
+  renderFeed(people);
+}
+
+function feedSentence(p){
+  const bits = [];
+  if(p.Genre) bits.push(`likes ${p.Genre.toLowerCase()} games`);
+  if(p.PaceStyle && !NEUTRAL_RE.test(p.PaceStyle)) bits.push(p.PaceStyle.toLowerCase());
+  if(p.CompetitiveStyle && !NEUTRAL_RE.test(p.CompetitiveStyle)) bits.push(p.CompetitiveStyle.toLowerCase());
+  const name = p.DisplayName || 'Someone';
+  return bits.length ? `<strong>${escapeHtml(name)}</strong> ${escapeHtml(bits.join(', '))}.` : `<strong>${escapeHtml(name)}</strong> joined the survey.`;
+}
+
+function renderFeed(people){
+  const content = document.getElementById('content');
+  const withDates = people.filter(p => p.LastUpdated).sort((a,b) => new Date(b.LastUpdated) - new Date(a.LastUpdated));
+  const recent = (withDates.length ? withDates : people).slice(0, 8);
+  if(recent.length === 0) return;
+  const feed = document.createElement('div');
+  feed.className = 'feed';
+  feed.innerHTML = `<h2>Recently updated</h2><ul>${recent.map(p => `<li>${feedSentence(p)}</li>`).join('')}</ul>`;
+  content.appendChild(feed);
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+
+async function load(){
+  if(!SCRIPT_URL || SCRIPT_URL.indexOf('PASTE_YOUR') === 0){
+    document.getElementById('content').innerHTML = `<div class="empty-state">This page isn't connected to a survey backend yet. See README.md for setup steps.</div>`;
+    document.getElementById('updatedLabel').textContent = 'Not configured';
+    return;
+  }
+  try{
+    const data = await fetchJSONP(SCRIPT_URL);
+    renderAll(data.profiles || []);
+    document.getElementById('updatedLabel').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(err){
+    console.error(err);
+    document.getElementById('updatedLabel').textContent = 'Couldn’t refresh — will retry';
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', load);
+document.getElementById('viewToggle').addEventListener('click', (e) => {
+  listMode = !listMode;
+  e.target.textContent = listMode ? 'Switch to graph view' : 'Switch to list view';
+  e.target.classList.toggle('active', listMode);
+  document.getElementById('content').classList.toggle('list-mode', listMode);
+});
+
+load();
+setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
