@@ -150,7 +150,7 @@
 </div>
 
 <script>
-const SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_MwhrsPCMKUuiQfAq_1X1aRh0G7-X8L29OqR7j40p90fmk4alsrT1VXjuPA89tHgNVw/exec";
 
 const SEQ_BLUE = ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281']; // ordinal, 5-step, light-end >=2:1
 const CAT_2 = ['#2a78d6', '#eb6834'];
@@ -158,6 +158,7 @@ const CAT_2 = ['#2a78d6', '#eb6834'];
 let allImpact = [];
 let allProfiles = [];
 let allCheckins = [];
+let allPolicyAcks = [];
 let adminKey = null;
 
 function getUrlKey(){
@@ -199,6 +200,8 @@ async function tryLoad(key){
     allProfiles = data.profiles || [];
     allImpact = data.impact || [];
     allCheckins = data.checkins || [];
+    allPolicyAcks = data.policyAcknowledgments || [];
+    enrichProfilesWithPolicyStatus();
     renderDashboard();
   } catch(err){
     console.error(err);
@@ -233,6 +236,28 @@ function renderDashboard(){
   renderPrefTable();
 }
 
+// Enriches allProfiles in place with a computed PolicyAcknowledged field —
+// the most recent acknowledgment timestamp for that email, or '' if they've
+// never checked the behavior-policy box. PolicyAcknowledgments is an
+// append-only log (see apps-script.gs), so this picks the latest row per
+// email rather than assuming one row per person.
+function enrichProfilesWithPolicyStatus(){
+  const latestByEmail = new Map();
+  allPolicyAcks.forEach(r => {
+    const email = (r.Email || '').toLowerCase();
+    if(!email) return;
+    const ts = r.Timestamp ? new Date(r.Timestamp) : null;
+    const existing = latestByEmail.get(email);
+    if(!existing || (ts && (!existing.date || ts > existing.date))){
+      latestByEmail.set(email, { date: ts, version: r.PolicyVersion || '' });
+    }
+  });
+  allProfiles.forEach(p => {
+    const hit = latestByEmail.get((p.Email || '').toLowerCase());
+    p.PolicyAcknowledged = (hit && hit.date) ? hit.date.toISOString() : '';
+  });
+}
+
 function scoreFeltConnected(v){
   const map = { 'Not at all':1, 'A little':2, "I don't know": null, 'Yes - somewhat':4, 'Yes - a lot':5 };
   return map.hasOwnProperty(v) ? map[v] : null;
@@ -246,11 +271,14 @@ function renderStats(){
   const scores = allImpact.map(r => scoreFeltConnected(r.FeltMoreConnected)).filter(v => v !== null);
   const avgScore = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
   const wouldReturn = allImpact.filter(r => r.WouldReturnIfIsolated === 'Yes').length;
+  const totalProfiles = allProfiles.length;
+  const policyAcked = allProfiles.filter(p => p.PolicyAcknowledged).length;
 
   const tiles = [
     { value: totalCheckins, label: 'Total check-ins' },
     { value: uniqueAttendees, label: 'Unique attendees' },
     { value: totalCheckins ? Math.round(firstTimeCheckins/totalCheckins*100)+'%' : '—', label: 'First-time check-ins' },
+    { value: totalProfiles ? Math.round(policyAcked/totalProfiles*100)+'%' : '—', label: 'Behavior policy acknowledged' },
     { value: totalCheckins ? Math.round(totalImpactSubs/totalCheckins*100)+'%' : '—', label: 'Check-ins that answered impact Qs' },
     { value: avgScore + ' / 5', label: 'Avg. "felt more connected" score' },
     { value: totalImpactSubs ? Math.round(wouldReturn/totalImpactSubs*100)+'%' : '—', label: '"Would return if isolated" = Yes' }
@@ -405,6 +433,7 @@ let prefSort = { col: 'DisplayName', dir: 1 };
 const PREF_COLS = [
   { key: 'DisplayName', label: 'Name' },
   { key: 'Email', label: 'Email' },
+  { key: 'PolicyAcknowledged', label: "Policy ack'd" },
   { key: 'SocialStyle', label: 'Social style' },
   { key: 'NoiseTolerance', label: 'Noise' },
   { key: 'LightSensitivity', label: 'Light sensitivity' },
@@ -428,7 +457,7 @@ function renderPrefTable(){
   ).join('') + '</tr>';
   table.querySelector('tbody').innerHTML = rows.map(r => '<tr>' + PREF_COLS.map(c => {
     let v = r[c.key];
-    if(c.key === 'LastUpdated' && v) v = new Date(v).toLocaleString();
+    if((c.key === 'LastUpdated' || c.key === 'PolicyAcknowledged') && v) v = new Date(v).toLocaleString();
     return `<td class="${v ? '' : 'muted'}">${escapeHtml(v || '—')}</td>`;
   }).join('') + '</tr>').join('') || `<tr><td colspan="${PREF_COLS.length}" class="muted">No profiles yet.</td></tr>`;
 
