@@ -121,6 +121,12 @@
   .policy-check input[type=checkbox]{ width:18px; height:18px; margin-top:2px; flex-shrink:0; accent-color: var(--series-1); }
   .policy-check span{ font-size:14px; color: var(--text-secondary); line-height:1.4; }
 
+  .callout{
+    border: 1.5px solid var(--gridline); border-radius:12px; padding:14px 16px; margin: 4px 0 18px;
+    background: color-mix(in srgb, var(--series-1) 8%, transparent); font-size:14px;
+    line-height:1.5; color: var(--text-secondary);
+  }
+
   .thankyou{ align-items:center; text-align:center; justify-content:center; gap:14px; }
   .thankyou .check{
     width:56px; height:56px; border-radius:50%; background: color-mix(in srgb, var(--good) 14%, transparent);
@@ -471,18 +477,71 @@ function renderPolicyScreen(email, name){
   });
   continueBtn.addEventListener('click', () => {
     if(!checkbox.checked) return;
-    confirmCheckIn(email, name, true);
+    renderPhotoConsentScreen(email, name);
   });
 }
 
-function confirmCheckIn(email, name, policyAcknowledged){
+/* ============================================================
+   Photo consent — required Yes/No, asked once per device
+   alongside the policy screen (new/unrecognized-device path
+   only). No answer defaults to "no photos" at read time (see
+   admin.html and apps-script.gs) — this is a consent question,
+   so silence must never be read as permission.
+   ============================================================ */
+function renderPhotoConsentScreen(email, name){
+  container.innerHTML = `
+    <div class="step active">
+      <span class="tag">Before you check in</span>
+      <h1>Okay if we take your photo?</h1>
+      <p class="lede">We sometimes take photos at events for social media and grant reports. Totally your choice — if you'd rather not be photographed, we'll make sure everyone can tell at a glance.</p>
+      <div class="choices">
+        <button class="choice-btn" id="photoYesBtn">Yes, that's fine</button>
+        <button class="choice-btn" id="photoNoBtn">No photos please</button>
+      </div>
+      <div class="nav">
+        <button class="secondary" id="photoBackBtn">Back</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('photoYesBtn').addEventListener('click', () => {
+    confirmCheckIn(email, name, true, 'yes');
+  });
+  document.getElementById('photoNoBtn').addEventListener('click', () => {
+    renderPhotoOptOutConfirm(email, name);
+  });
+  document.getElementById('photoBackBtn').addEventListener('click', () => {
+    renderPolicyScreen(email, name);
+  });
+}
+
+function renderPhotoOptOutConfirm(email, name){
+  container.innerHTML = `
+    <div class="step active">
+      <span class="tag">Before you check in</span>
+      <h1>Got it — no photos</h1>
+      <div class="callout">Please grab a <strong>"No photos please"</strong> lanyard at the check-in table so everyone at the event can tell at a glance. Thanks for letting us know!</div>
+      <div class="nav">
+        <button class="secondary" id="photoOptOutBackBtn">Back</button>
+        <button class="primary" id="photoOptOutContinueBtn">Continue</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('photoOptOutBackBtn').addEventListener('click', () => {
+    renderPhotoConsentScreen(email, name);
+  });
+  document.getElementById('photoOptOutContinueBtn').addEventListener('click', () => {
+    confirmCheckIn(email, name, true, 'no');
+  });
+}
+
+function confirmCheckIn(email, name, policyAcknowledged, photoConsent){
   const alreadyCheckedInAsThisPerson = checkedIn && normalizeForCompare(answers.email) === normalizeForCompare(email);
   answers.email = email;
   answers.displayName = name;
   setCookie('a3s_last_email', email, 365 * 5);
   setCookie('a3s_last_name', name, 365 * 5);
   if(!alreadyCheckedInAsThisPerson){
-    sendCheckIn(email, name, policyAcknowledged);
+    sendCheckIn(email, name, policyAcknowledged, photoConsent);
   }
   recomputeStepOrder();
   currentIndex = 0;
@@ -493,7 +552,7 @@ function normalizeForCompare(s){
   return (s || '').trim().toLowerCase();
 }
 
-function sendCheckIn(email, name, policyAcknowledged){
+function sendCheckIn(email, name, policyAcknowledged, photoConsent){
   checkedIn = true;
   const payload = {
     type: 'checkin',
@@ -504,6 +563,9 @@ function sendCheckIn(email, name, policyAcknowledged){
   if(policyAcknowledged){
     payload.policyAcknowledged = true;
     payload.policyVersion = POLICY_VERSION;
+  }
+  if(photoConsent){
+    payload.photoConsent = photoConsent; // 'yes' | 'no'
   }
   postToBackend(payload);
 }

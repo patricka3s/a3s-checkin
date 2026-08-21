@@ -258,6 +258,14 @@ function enrichProfilesWithPolicyStatus(){
   });
 }
 
+// Consent question: silence must default to "no", never "yes" — treat
+// anything other than an explicit 'yes' (including never having been
+// asked, e.g. a returning-device check-in that predates this question)
+// as opted out. See survey.html's renderPhotoConsentScreen.
+function hasPhotoConsent(p){
+  return (p.PhotoConsent || '').toLowerCase() === 'yes';
+}
+
 function scoreFeltConnected(v){
   const map = { 'Not at all':1, 'A little':2, "I don't know": null, 'Yes - somewhat':4, 'Yes - a lot':5 };
   return map.hasOwnProperty(v) ? map[v] : null;
@@ -273,12 +281,14 @@ function renderStats(){
   const wouldReturn = allImpact.filter(r => r.WouldReturnIfIsolated === 'Yes').length;
   const totalProfiles = allProfiles.length;
   const policyAcked = allProfiles.filter(p => p.PolicyAcknowledged).length;
+  const photoOptOuts = allProfiles.filter(p => !hasPhotoConsent(p)).length;
 
   const tiles = [
     { value: totalCheckins, label: 'Total check-ins' },
     { value: uniqueAttendees, label: 'Unique attendees' },
     { value: totalCheckins ? Math.round(firstTimeCheckins/totalCheckins*100)+'%' : '—', label: 'First-time check-ins' },
     { value: totalProfiles ? Math.round(policyAcked/totalProfiles*100)+'%' : '—', label: 'Behavior policy acknowledged' },
+    { value: totalProfiles ? photoOptOuts : '—', label: 'Opted out of photos (incl. unasked)' },
     { value: totalCheckins ? Math.round(totalImpactSubs/totalCheckins*100)+'%' : '—', label: 'Check-ins that answered impact Qs' },
     { value: avgScore + ' / 5', label: 'Avg. "felt more connected" score' },
     { value: totalImpactSubs ? Math.round(wouldReturn/totalImpactSubs*100)+'%' : '—', label: '"Would return if isolated" = Yes' }
@@ -434,6 +444,7 @@ const PREF_COLS = [
   { key: 'DisplayName', label: 'Name' },
   { key: 'Email', label: 'Email' },
   { key: 'PolicyAcknowledged', label: "Policy ack'd" },
+  { key: 'PhotoConsent', label: 'Photo OK?' },
   { key: 'SocialStyle', label: 'Social style' },
   { key: 'NoiseTolerance', label: 'Noise' },
   { key: 'LightSensitivity', label: 'Light sensitivity' },
@@ -456,6 +467,13 @@ function renderPrefTable(){
     `<th data-col="${c.key}">${c.label}${prefSort.col===c.key ? (prefSort.dir===1?' ▲':' ▼') : ''}</th>`
   ).join('') + '</tr>';
   table.querySelector('tbody').innerHTML = rows.map(r => '<tr>' + PREF_COLS.map(c => {
+    // PhotoConsent is a consent question, not a regular preference — an
+    // unanswered/blank value must read as "No photos", never as the
+    // usual "—" placeholder (which would look like "unknown"/"ask them"
+    // rather than the deliberate opt-out default it actually is).
+    if(c.key === 'PhotoConsent'){
+      return `<td>${hasPhotoConsent(r) ? 'Yes' : 'No photos'}</td>`;
+    }
     let v = r[c.key];
     if((c.key === 'LastUpdated' || c.key === 'PolicyAcknowledged') && v) v = new Date(v).toLocaleString();
     return `<td class="${v ? '' : 'muted'}">${escapeHtml(v || '—')}</td>`;
